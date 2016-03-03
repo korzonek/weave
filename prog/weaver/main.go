@@ -96,6 +96,7 @@ func main() {
 		datapathName       string
 		trustedSubnetStr   string
 		dbPrefix           string
+		ipamSeedStr        string
 
 		defaultDockerHost = "unix:///var/run/docker.sock"
 	)
@@ -134,6 +135,7 @@ func main() {
 	mflag.StringVar(&dbPrefix, []string{"-db-prefix"}, "weave", "pathname/prefix of filename to store data")
 
 	mflag.StringVar(&trustedSubnetStr, []string{"-trusted-subnets"}, "", "Comma-separated list of trusted subnets in CIDR notation")
+	mflag.StringVar(&ipamSeedStr, []string{"-ipam-seed"}, "", "Comma-separated list of peer names amongst which address space is shared initially")
 
 	// crude way of detecting that we probably have been started in a
 	// container, with `weave launch` --> suppress misleading paths in
@@ -231,7 +233,7 @@ func main() {
 		Log.Fatal("At most one of --observer and --init-peer-count must be specified.")
 	}
 	if iprangeCIDR != "" {
-		allocator, defaultSubnet = createAllocator(router.Router, iprangeCIDR, ipsubnetCIDR, determineQuorum(observer, peerCount, peers), db, isKnownPeer)
+		allocator, defaultSubnet = createAllocator(router.Router, ipamSeedStr, iprangeCIDR, ipsubnetCIDR, determineQuorum(observer, peerCount, peers), db, isKnownPeer)
 		observeContainers(allocator)
 		ids, err := dockerCli.AllContainerIDs()
 		checkFatal(err)
@@ -357,7 +359,8 @@ func parseAndCheckCIDR(cidrStr string) address.CIDR {
 	return cidr
 }
 
-func createAllocator(router *mesh.Router, ipRangeStr string, defaultSubnetStr string, quorum uint, db db.DB, isKnownPeer func(mesh.PeerName) bool) (*ipam.Allocator, address.CIDR) {
+func createAllocator(router *mesh.Router, ipamSeedStr, ipRangeStr string, defaultSubnetStr string, quorum uint, db db.DB, isKnownPeer func(mesh.PeerName) bool) (*ipam.Allocator, address.CIDR) {
+	seed := parseIPAMSeed(ipamSeedStr)
 	ipRange := parseAndCheckCIDR(ipRangeStr)
 	defaultSubnet := ipRange
 	if defaultSubnetStr != "" {
@@ -371,6 +374,7 @@ func createAllocator(router *mesh.Router, ipRangeStr string, defaultSubnetStr st
 		router.Ourself.Peer.Name,
 		router.Ourself.Peer.UID,
 		router.Ourself.Peer.NickName,
+		seed,
 		ipRange.Range(),
 		quorum, db, isKnownPeer}
 
@@ -462,6 +466,23 @@ func parseTrustedSubnets(trustedSubnetStr string) []*net.IPNet {
 	}
 
 	return trustedSubnets
+}
+
+func parseIPAMSeed(ipamSeed string) []mesh.PeerName {
+	peerNames := []mesh.PeerName{}
+	if ipamSeed == "" {
+		return peerNames
+	}
+
+	for _, peerNameStr := range strings.Split(ipamSeed, ",") {
+		peerName, err := mesh.PeerNameFromUserInput(peerNameStr)
+		if err != nil {
+			Log.Fatal("Unable to parse IPAM seed: ", err)
+		}
+		peerNames = append(peerNames, peerName)
+	}
+
+	return peerNames
 }
 
 func listenAndServeHTTP(httpAddr string, muxRouter *mux.Router) {

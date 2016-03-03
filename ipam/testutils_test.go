@@ -125,8 +125,8 @@ func CheckAllExpectedMessagesSent(allocs ...*Allocator) {
 
 type mockDB struct{}
 
-func (d *mockDB) Load(_ string, _ interface{}) error { return nil }
-func (d *mockDB) Save(_ string, _ interface{}) error { return nil }
+func (d *mockDB) Load(_ string, _ interface{}) (bool, error) { return false, nil }
+func (d *mockDB) Save(_ string, _ interface{}) error         { return nil }
 
 func makeAllocator(name string, cidrStr string, quorum uint) (*Allocator, address.CIDR) {
 	peername, err := mesh.PeerNameFromString(name)
@@ -140,7 +140,7 @@ func makeAllocator(name string, cidrStr string, quorum uint) (*Allocator, addres
 	}
 
 	config := Config{peername, mesh.PeerUID(rand.Int63()),
-		"nick-" + name, cidr.Range(), quorum, new(mockDB), func(mesh.PeerName) bool { return true }}
+		"nick-" + name, []mesh.PeerName{}, cidr.Range(), quorum, new(mockDB), func(mesh.PeerName) bool { return true }}
 
 	alloc := NewAllocator(config)
 
