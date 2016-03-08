@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	cni "github.com/appc/cni/pkg/skel"
 	"github.com/docker/libnetwork/ipamapi"
 	weaveapi "github.com/weaveworks/weave/api"
 	. "github.com/weaveworks/weave/common"
@@ -52,6 +53,12 @@ func main() {
 	}
 
 	weave := weaveapi.NewClient(os.Getenv("WEAVE_HTTP_ADDR"), Log)
+
+	if os.Args[0] == "weave-ipam" {
+		i := ipamplugin.NewIpam(weave)
+		cni.PluginMain(i.CmdAdd, i.CmdDel)
+		os.Exit(0)
+	}
 
 	Log.Println("Weave plugin", version, "Command line options:", os.Args[1:])
 	Log.Info(dockerClient.Info())
