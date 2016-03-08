@@ -107,16 +107,47 @@ func (driver *driver) EndpointInfo(req *api.EndpointInfoRequest) (*api.EndpointI
 }
 
 func (driver *driver) JoinEndpoint(j *api.JoinRequest) (*api.JoinResponse, error) {
-	endID := j.EndpointID
+	local, err := createAndAttach(j.EndpointID, 0)
+	if err != nil {
+		return nil, err
+	}
 
+	if err := netlink.LinkSetUp(local); err != nil {
+		return nil, errorf(`unable to bring veth up: %s`, err)
+	}
+
+	ifname := &api.InterfaceName{
+		SrcName:   local.PeerName,
+		DstPrefix: "ethwe",
+	}
+
+	response := &api.JoinResponse{
+		InterfaceName: ifname,
+	}
+	if !driver.noMulticastRoute {
+		multicastRoute := api.StaticRoute{
+			Destination: "224.0.0.0/4",
+			RouteType:   types.CONNECTED,
+		}
+		response.StaticRoutes = append(response.StaticRoutes, multicastRoute)
+	}
+	Log.Infof("Join endpoint %s:%s to %s", j.NetworkID, j.EndpointID, j.SandboxKey)
+	return response, nil
+}
+
+// create and attach local name to the Weave bridge
+func createAndAttach(id string, mtu int) (*netlink.Veth, error) {
 	maybeBridge, err := netlink.LinkByName(WeaveBridge)
 	if err != nil {
 		return nil, errorf(`bridge "%s" not present; did you launch weave?`, WeaveBridge)
 	}
 
-	// create and attach local name to the bridge
-	local := vethPair(endID[:5])
-	local.Attrs().MTU = maybeBridge.Attrs().MTU
+	local := vethPair(id[:5])
+	if mtu == 0 {
+		local.Attrs().MTU = maybeBridge.Attrs().MTU
+	} else {
+		local.Attrs().MTU = mtu
+	}
 	if err := netlink.LinkAdd(local); err != nil {
 		return nil, errorf("could not create veth pair: %s", err)
 	}
@@ -140,27 +171,7 @@ func (driver *driver) JoinEndpoint(j *api.JoinRequest) (*api.JoinResponse, error
 		Log.Errorf("device %s is %+v", WeaveBridge, maybeBridge)
 		return nil, errorf(`device "%s" not a bridge`, WeaveBridge)
 	}
-	if err := netlink.LinkSetUp(local); err != nil {
-		return nil, errorf(`unable to bring veth up: %s`, err)
-	}
-
-	ifname := &api.InterfaceName{
-		SrcName:   local.PeerName,
-		DstPrefix: "ethwe",
-	}
-
-	response := &api.JoinResponse{
-		InterfaceName: ifname,
-	}
-	if !driver.noMulticastRoute {
-		multicastRoute := api.StaticRoute{
-			Destination: "224.0.0.0/4",
-			RouteType:   types.CONNECTED,
-		}
-		response.StaticRoutes = append(response.StaticRoutes, multicastRoute)
-	}
-	Log.Infof("Join endpoint %s:%s to %s", j.NetworkID, j.EndpointID, j.SandboxKey)
-	return response, nil
+	return local, nil
 }
 
 func (driver *driver) LeaveEndpoint(leave *api.LeaveRequest) error {
