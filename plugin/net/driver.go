@@ -107,7 +107,7 @@ func (driver *driver) EndpointInfo(req *api.EndpointInfoRequest) (*api.EndpointI
 }
 
 func (driver *driver) JoinEndpoint(j *api.JoinRequest) (*api.JoinResponse, error) {
-	local, err := createAndAttach(j.EndpointID, 0)
+	local, err := createAndAttach(j.EndpointID, WeaveBridge, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -136,10 +136,10 @@ func (driver *driver) JoinEndpoint(j *api.JoinRequest) (*api.JoinResponse, error
 }
 
 // create and attach local name to the Weave bridge
-func createAndAttach(id string, mtu int) (*netlink.Veth, error) {
-	maybeBridge, err := netlink.LinkByName(WeaveBridge)
+func createAndAttach(id, bridgeName string, mtu int) (*netlink.Veth, error) {
+	maybeBridge, err := netlink.LinkByName(bridgeName)
 	if err != nil {
-		return nil, errorf(`bridge "%s" not present; did you launch weave?`, WeaveBridge)
+		return nil, errorf(`bridge "%s" not present; did you launch weave?`, bridgeName)
 	}
 
 	local := vethPair(id[:5])
@@ -159,17 +159,15 @@ func createAndAttach(id string, mtu int) (*netlink.Veth, error) {
 		}
 	case *netlink.GenericLink:
 		if maybeBridge.Type() != "openvswitch" {
-			Log.Errorf("device %s is %+v", WeaveBridge, maybeBridge)
-			return nil, errorf(`device "%s" is of type "%s"`, WeaveBridge, maybeBridge.Type())
+			return nil, errorf(`device "%s" is of type "%s"`, bridgeName, maybeBridge.Type())
 		}
-		odp.AddDatapathInterface(WeaveBridge, local.Name)
+		odp.AddDatapathInterface(bridgeName, local.Name)
 	case *netlink.Device:
-		Log.Warnf("kernel does not report what kind of device %s is, just %+v", WeaveBridge, maybeBridge)
+		Log.Warnf("kernel does not report what kind of device %s is, just %+v", bridgeName, maybeBridge)
 		// Assume it's our openvswitch device, and the kernel has not been updated to report the kind.
-		odp.AddDatapathInterface(WeaveBridge, local.Name)
+		odp.AddDatapathInterface(bridgeName, local.Name)
 	default:
-		Log.Errorf("device %s is %+v", WeaveBridge, maybeBridge)
-		return nil, errorf(`device "%s" not a bridge`, WeaveBridge)
+		return nil, errorf(`device "%s" not a bridge`, bridgeName)
 	}
 	return local, nil
 }

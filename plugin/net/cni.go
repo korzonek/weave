@@ -62,7 +62,7 @@ func (c *CNIPlugin) CmdAdd(args *skel.CmdArgs) error {
 		id = fmt.Sprintf("%x", data)
 	}
 
-	local, err := createAndAttach(id, conf.MTU)
+	local, err := createAndAttach(id, conf.BrName, conf.MTU)
 	if err != nil {
 		return err
 	}
