@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/appc/cni/pkg/ipam"
 	"github.com/appc/cni/pkg/skel"
@@ -13,6 +14,10 @@ import (
 	weaveapi "github.com/weaveworks/weave/api"
 	"github.com/weaveworks/weave/common"
 	ipamplugin "github.com/weaveworks/weave/plugin/ipam"
+)
+
+var (
+	zeroNetwork = net.IPNet{IP: net.IPv4zero, Mask: net.IPv4Mask(0, 0, 0, 0)}
 )
 
 type CNIPlugin struct {
@@ -95,6 +100,11 @@ func (c *CNIPlugin) CmdAdd(args *skel.CmdArgs) error {
 	}
 	if result.IP4 == nil {
 		return cleanup(errorf("IPAM plugin failed to allocate IP address"))
+	}
+
+	if result.IP4.Routes == nil {
+		common.Log.Errorf("Setting default route")
+		result.IP4.Routes = []types.Route{{Dst: zeroNetwork}}
 	}
 
 	err = common.WithNetNS(ns, func() error {
