@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"net"
@@ -101,8 +102,32 @@ func linkToNetDev(link netlink.Link) (*NetDev, error) {
 
 // Lookup the weave interface of a container
 func GetWeaveNetDevs(processID int) ([]NetDev, error) {
+	var weaveBridge netlink.Link
+	forEachLink(func(link netlink.Link) error {
+		if link.Attrs().Name == "weave" {
+			weaveBridge = link
+		}
+		return nil
+	})
+	if weaveBridge == nil {
+		return nil, fmt.Errorf("Cannot find weave bridge")
+	}
+	// Scan devices in root namespace to find those attached to weave bridge
+	indexes := make(map[int]struct{})
+	err := forEachLink(func(link netlink.Link) error {
+		if link.Attrs().MasterIndex == weaveBridge.Attrs().Index {
+			indexes[link.Attrs().Index] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
 	return FindNetDevs(processID, func(link netlink.Link) bool {
-		return strings.HasPrefix(link.Attrs().Name, "ethwe")
+		// For checking, rely on index number of veth end inside namespace being -1 of end outside
+		_, isveth := link.(*netlink.Veth)
+		_, found := indexes[link.Attrs().Index+1]
+		return isveth && found
 	})
 }
 
