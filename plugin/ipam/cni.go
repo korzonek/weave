@@ -23,6 +23,9 @@ func (i *Ipam) Allocate(args *skel.CmdArgs) (*types.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if conf == nil {
+		conf = &ipamConf{}
+	}
 	containerID := args.ContainerID
 	var ipnet *net.IPNet
 
