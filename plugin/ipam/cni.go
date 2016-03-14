@@ -51,11 +51,7 @@ func (i *Ipam) Allocate(args *skel.CmdArgs) (*types.Result, error) {
 }
 
 func (i *Ipam) CmdDel(args *skel.CmdArgs) error {
-	if err := i.Release(args); err != nil {
-		return err
-	}
-	result := types.Result{}
-	return result.Print()
+	return i.Release(args)
 }
 
 func (i *Ipam) Release(args *skel.CmdArgs) error {
