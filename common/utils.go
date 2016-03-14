@@ -102,6 +102,13 @@ func linkToNetDev(link netlink.Link) (*NetDev, error) {
 
 // Lookup the weave interface of a container
 func GetWeaveNetDevs(processID int) ([]NetDev, error) {
+	// Bail out if this container is running in the root namespace
+	nsToplevel, _ := netns.GetFromPid(1)
+	nsContainr, _ := netns.GetFromPid(processID)
+	if nsToplevel.Equal(nsContainr) {
+		return nil, nil
+	}
+
 	var weaveBridge netlink.Link
 	forEachLink(func(link netlink.Link) error {
 		if link.Attrs().Name == "weave" {
